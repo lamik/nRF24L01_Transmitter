@@ -10,6 +10,16 @@
 
 #include "main.h"
 
+//
+//	Configuration
+//
+
+#define NRF24_DYNAMIC_PAYLOAD 1
+
+//
+//
+//
+
 void nRF24_Init(SPI_HandleTypeDef *hspi);
 
 //
@@ -41,6 +51,7 @@ void nRF24_AutoACK(uint8_t pipe, uint8_t onoff);
 void nRF24_SetRXAddress(uint8_t pipe, uint8_t* address); // Remember to define RX address before TX
 void nRF24_SetTXAddress(uint8_t* address);
 void nRF24_SetAddressWidth(uint8_t size);
+void nRF24_SetPayloadSize(uint8_t pipe, uint8_t size);
 
 //
 // INTERRUPT CONTROL
@@ -53,9 +64,9 @@ void nRF24_EnableMaxRetransmitIRQ(uint8_t onoff);
 //
 // PUSH/PULL DATA TO PAYLOAD
 //
-void nRF24_WriteTXPayload(uint8_t* data);
+void nRF24_WriteTXPayload(uint8_t * data, uint8_t size);
 void nRF24_WaitTX();
-void nRF24_ReadRXPaylaod(uint8_t* data);
+void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size);
 
 //
 // TRANSMITTING DATA

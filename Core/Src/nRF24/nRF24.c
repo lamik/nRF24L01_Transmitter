@@ -315,6 +315,21 @@ void nRF24_ClearInterrupts(void)
 	nRF24_WriteStatus(status);
 }
 
+uint8_t nRF24_GetDynamicPayloadSize(void)
+{
+    uint8_t result = 0;
+
+    result = nRF24_ReadRegister(NRF24_CMD_R_RX_PL_WID);
+
+    if (result > 32) // Something went wrong :)
+    {
+        nRF24_FlushRX();
+        HAL_Delay(2);
+        return 0;
+    }
+    return result;
+}
+
 void nRF24_EnableRXDataReadyIRQ(uint8_t onoff)
 {
 	uint8_t config = nRF24_ReadConfig();
@@ -351,9 +366,13 @@ void nRF24_EnableMaxRetransmitIRQ(uint8_t onoff)
 	nRF24_WriteConfig(config);
 }
 
-void nRF24_WriteTXPayload(uint8_t * data)
+void nRF24_WriteTXPayload(uint8_t * data, uint8_t size)
 {
+#if (NRF24_DYNAMIC_PAYLOAD == 1)
+	nRF24_WriteRegisters(NRF24_CMD_W_TX_PAYLOAD, data, size);
+#else
 	nRF24_WriteRegisters(NRF24_CMD_W_TX_PAYLOAD, data, NRF24_PAYLOAD_SIZE);
+#endif
 }
 
 void nRF24_WaitTX()
@@ -370,9 +389,14 @@ void nRF24_WaitTX()
 
 }
 
-void nRF24_ReadRXPaylaod(uint8_t *data)
+void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size)
 {
+#if (NRF24_DYNAMIC_PAYLOAD == 1)
+	*size = nRF24_GetDynamicPayloadSize();
+	nRF24_ReadRegisters(NRF24_CMD_R_RX_PAYLOAD, data, *size);
+#else
 	nRF24_ReadRegisters(NRF24_CMD_R_RX_PAYLOAD, data, NRF24_PAYLOAD_SIZE);
+#endif
 	nRF24_WriteRegister(NRF24_STATUS, (1<NRF24_RX_DR));
 	if(nRF24_ReadStatus() & (1<<NRF24_TX_DS))
 		nRF24_WriteRegister(NRF24_STATUS, (1<<NRF24_TX_DS));
@@ -444,9 +468,14 @@ void nRF24_Init(SPI_HandleTypeDef *hspi)
 	nRF24_EnableCRC(1); // Enable CRC
 	nRF24_SetCRCLength(NRF24_CRC_WIDTH_1B); // CRC Length 1 byte
 	nRF24_SetRetries(0x04, 0x07); // 1000us, 7 times
+#if (NRF24_DYNAMIC_PAYLOAD == 1)
+	nRF24_WriteRegister(NRF24_FEATURE, nRF24_ReadRegister(NRF24_FEATURE) | (1<<NRF24_EN_DPL)); // Enable dynamic payload feature
+	nRF24_WriteRegister(NRF24_DYNPD, 0x3F); // Enable dynamic payloads for all pipes
+#else
 	nRF24_WriteRegister(NRF24_DYNPD, 0); // Disable dynamic payloads for all pipes
-	nRF24_SetRFChannel(10); // Set RF channel for transmission
 	nRF24_SetPayloadSize(0, NRF24_PAYLOAD_SIZE); // Set 32 bytes payload for pipe 0
+#endif
+	nRF24_SetRFChannel(10); // Set RF channel for transmission
 	nRF24_EnablePipe(0, 1); // Enable pipe 0
 	nRF24_AutoACK(0, 1); // Enable auto ACK for pipe 0
 	nRF24_SetAddressWidth(NRF24_ADDR_SIZE); // Set address size

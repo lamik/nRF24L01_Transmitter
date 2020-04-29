@@ -97,6 +97,7 @@
 #define NRF24_RX_FULL     1
 #define NRF24_RX_EMPTY    0
 #define NRF24_RPD         0x09
+#define NRF24_EN_DPL      2
 
 #define NRF24_PAYLOAD_SIZE 1
 

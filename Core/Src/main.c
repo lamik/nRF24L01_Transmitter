@@ -38,6 +38,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define MESSAGE_BUFF_LEN 33 // 32 payload + \0
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -49,9 +51,10 @@
 
 /* USER CODE BEGIN PV */
 volatile uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
-uint8_t Nrf24_Message[NRF24_PAYLOAD_SIZE];
-uint8_t Message[32];
+uint8_t Nrf24_Message[MESSAGE_BUFF_LEN];
+uint8_t Message[MESSAGE_BUFF_LEN];
 uint8_t MessageLength;
+uint32_t Numbers[9] = { 1, 12, 123, 1234, 12345, 123456, 1234567, 12345678, 123456789};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -107,10 +110,10 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  for(i=0; i<10; i++)
+	  for(i=0; i<9; i++)
 	  {
-		  MessageLength = sprintf(Message, "%d", i );
-		  nRF24_WriteTXPayload(Message);
+		  MessageLength = sprintf(Message, "%d", Numbers[i] );
+		  nRF24_WriteTXPayload(Message, MessageLength);
 		  HAL_Delay(1);
 		  nRF24_WaitTX();
 		  HAL_Delay(1000);
