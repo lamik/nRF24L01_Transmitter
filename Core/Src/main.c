@@ -20,12 +20,15 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdio.h"
+#include "nRF24/nRF24_Defs.h"
+#include "nRF24/nRF24.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,7 +48,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+volatile uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
+uint8_t Nrf24_Message[NRF24_PAYLOAD_SIZE];
+uint8_t Message[32];
+uint8_t MessageLength;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,14 +94,29 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-
+  nRF24_Init(&hspi1);
+  nRF24_SetRXAddress(0, "Nad");
+  nRF24_SetTXAddress("Odb");
+  nRF24_TX_Mode();
+  uint8_t i;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  for(i=0; i<10; i++)
+	  {
+		  MessageLength = sprintf(Message, "%d", i );
+		  nRF24_WriteTXPayload(Message);
+		  HAL_Delay(1);
+		  nRF24_WaitTX();
+		  HAL_Delay(1000);
+	  }
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
