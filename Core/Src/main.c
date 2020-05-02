@@ -113,9 +113,7 @@ int main(void)
 	  for(i=0; i<9; i++)
 	  {
 		  MessageLength = sprintf(Message, "%d", Numbers[i] );
-		  nRF24_WriteTXPayload(Message, MessageLength);
-		  HAL_Delay(1);
-		  nRF24_WaitTX();
+		  nRF24_SendPacket(Message, MessageLength);
 		  HAL_Delay(1000);
 	  }
 

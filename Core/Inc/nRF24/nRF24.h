@@ -17,7 +17,22 @@
 #define NRF24_DYNAMIC_PAYLOAD 1
 
 //
+// enums
 //
+typedef enum
+{
+	NRF24_RECEIVED_PACKET,		// 0
+	NRF24_NO_RECEIVED_PACKET,	// 1
+} nRF24_RX_Status;
+
+typedef enum
+{
+	NRF24_TRANSMITTED_PACKET,		// 0
+	NRF24_NO_TRANSMITTED_PACKET,	// 1
+} nRF24_TX_Status;
+
+//
+// Init
 //
 
 void nRF24_Init(SPI_HandleTypeDef *hspi);
@@ -71,8 +86,8 @@ void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size);
 //
 // TRANSMITTING DATA
 //
-void nRF24_SendPacket(uint8_t* data);
-void nRF24_ReceivePacket(uint8_t* data);
+nRF24_TX_Status nRF24_SendPacket(uint8_t* Data, uint8_t Size);
+nRF24_RX_Status nRF24_ReceivePacket(uint8_t* Data, uint8_t *Size);
 
 //
 // FLUSHING FIFOs

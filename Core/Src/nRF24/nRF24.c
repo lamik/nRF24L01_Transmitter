@@ -402,14 +402,25 @@ void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size)
 		nRF24_WriteRegister(NRF24_STATUS, (1<<NRF24_TX_DS));
 }
 
-void nRF24_SendPacket(uint8_t* data)
+nRF24_TX_Status nRF24_SendPacket(uint8_t* Data, uint8_t Size)
 {
+	if(Size > 32)
+		return NRF24_NO_TRANSMITTED_PACKET;
 
+	nRF24_WriteTXPayload(Data, Size);
+	nRF24_WaitTX();
+
+	return NRF24_TRANSMITTED_PACKET;
 }
 
-void nRF24_ReceivePacket(uint8_t* data)
+nRF24_RX_Status nRF24_ReceivePacket(uint8_t* Data, uint8_t *Size)
 {
-
+	if(nRF24_RXAvailible())
+	{
+		nRF24_ReadRXPaylaod(Data, Size);
+		return NRF24_RECEIVED_PACKET;
+	}
+	return NRF24_NO_RECEIVED_PACKET;
 }
 
 uint8_t nRF24_RXAvailible(void)
