@@ -15,7 +15,7 @@ static SPI_HandleTypeDef *hspi_nrf;
 
 static uint8_t addr_p0_backup[NRF24_ADDR_SIZE];
 
-extern volatile uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
+static volatile uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
 
 //
 // BASIC READ/WRITE FUNCTIONS
@@ -180,6 +180,59 @@ uint8_t nRF24_ReadStatus(void)
 void nRF24_WriteStatus(uint8_t st)
 {
 	nRF24_WriteRegister(NRF24_STATUS, st);
+}
+
+//
+// FIFO Status
+//
+
+uint8_t nRF24_ReadFifoStatus(void)
+{
+	return (nRF24_ReadRegister(NRF24_FIFO_STATUS));
+}
+
+void nRF24_WriteFifoStatus(uint8_t st)
+{
+	nRF24_WriteRegister(NRF24_FIFO_STATUS, st);
+}
+
+uint8_t nRF24_IsBitSetInFifoStatus(uint8_t Bit)
+{
+	uint8_t FifoStatus;
+
+	FifoStatus = nRF24_ReadFifoStatus();
+
+	if(FifoStatus & (1<<Bit))
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+uint8_t nRF24_IsTxReuse(void)
+{
+	return nRF24_IsBitSetInFifoStatus(NRF24_TX_REUSE);
+}
+
+uint8_t nRF24_IsTxFull(void)
+{
+	return nRF24_IsBitSetInFifoStatus(NRF24_TX_FULL);
+}
+
+uint8_t nRF24_IsTxEmpty(void)
+{
+	return nRF24_IsBitSetInFifoStatus(NRF24_TX_EMPTY);
+}
+
+uint8_t nRF24_IsRxFull(void)
+{
+	return nRF24_IsBitSetInFifoStatus(NRF24_RX_FULL);
+}
+
+uint8_t nRF24_IsRxEmpty(void)
+{
+	return nRF24_IsBitSetInFifoStatus(NRF24_RX_EMPTY);
 }
 
 void nRF24_FlushRX(void)
@@ -415,12 +468,16 @@ nRF24_TX_Status nRF24_SendPacket(uint8_t* Data, uint8_t Size)
 
 nRF24_RX_Status nRF24_ReceivePacket(uint8_t* Data, uint8_t *Size)
 {
+#if (NRF24_INTERRUPT_MODE == 0)
 	if(nRF24_RXAvailible())
 	{
+#endif
 		nRF24_ReadRXPaylaod(Data, Size);
+#if (NRF24_INTERRUPT_MODE == 0)
 		return NRF24_RECEIVED_PACKET;
 	}
 	return NRF24_NO_RECEIVED_PACKET;
+#endif
 }
 
 uint8_t nRF24_RXAvailible(void)
@@ -441,27 +498,67 @@ uint8_t nRF24_RXAvailible(void)
 void nRF24_IRQ_Handler(void)
 {
 	uint8_t status = nRF24_ReadStatus();
-
+	uint8_t ClearIrq = 0;
 	// RX FIFO Interrupt
 	if ((status & (1 << NRF24_RX_DR)))
 	{
 		nrf24_rx_flag = 1;
-		status |= (1<<NRF24_RX_DR); // Interrupt flag clear
-		nRF24_WriteStatus(status);
+		ClearIrq |= (1<<NRF24_RX_DR); // Interrupt flag clear
+
 	}
 	// TX Data Sent interrupt
 	if ((status & (1 << NRF24_TX_DS)))
 	{
 		nrf24_tx_flag = 1;
-		status |= (1<<NRF24_TX_DS); // Interrupt flag clear
-		nRF24_WriteStatus(status);
+		ClearIrq |= (1<<NRF24_TX_DS); // Interrupt flag clear
 	}
 	// Max Retransmits interrupt
 	if ((status & (1 << NRF24_MAX_RT)))
 	{
 		nrf24_mr_flag = 1;
-		status |= (1<<NRF24_MAX_RT); // Interrupt flag clear
-		nRF24_WriteStatus(status);
+		ClearIrq |= (1<<NRF24_MAX_RT); // Interrupt flag clear
+	}
+
+	nRF24_WriteStatus(ClearIrq);
+}
+
+//
+// nRF24 Event for Interrupt mode
+//
+
+__weak void nRF24_EventRxCallback(void)
+{
+
+}
+
+__weak void nRF24_EventTxCallback(void)
+{
+
+}
+
+__weak void nRF24_EventMrCallback(void)
+{
+
+}
+
+void nRF24_Event(void)
+{
+	if(nrf24_rx_flag)
+	{
+		nRF24_EventRxCallback();
+		nrf24_rx_flag = 0;
+	}
+
+	if(nrf24_tx_flag)
+	{
+		nRF24_EventTxCallback();
+		nrf24_tx_flag = 0;
+	}
+
+	if(nrf24_mr_flag)
+	{
+		nRF24_EventMrCallback();
+		nrf24_mr_flag = 0;
 	}
 }
 
@@ -491,13 +588,13 @@ void nRF24_Init(SPI_HandleTypeDef *hspi)
 	nRF24_AutoACK(0, 1); // Enable auto ACK for pipe 0
 	nRF24_SetAddressWidth(NRF24_ADDR_SIZE); // Set address size
 
-	nRF24_Delay_ms(20);
+	nRF24_Delay_ms(1);
 
 	nRF24_EnableRXDataReadyIRQ(0);
 	nRF24_EnableTXDataSentIRQ(0);
 	nRF24_EnableMaxRetransmitIRQ(0);
 
-	nRF24_Delay_ms(20);
+	nRF24_Delay_ms(1);
 
 	nRF24_ClearInterrupts();
 }

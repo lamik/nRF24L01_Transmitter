@@ -14,10 +14,11 @@
 //	Configuration
 //
 
-#define NRF24_DYNAMIC_PAYLOAD 1
+#define NRF24_DYNAMIC_PAYLOAD	1
+#define NRF24_INTERRUPT_MODE	1
 
 //
-// enums
+// Enums
 //
 typedef enum
 {
@@ -30,6 +31,7 @@ typedef enum
 	NRF24_TRANSMITTED_PACKET,		// 0
 	NRF24_NO_TRANSMITTED_PACKET,	// 1
 } nRF24_TX_Status;
+
 
 //
 // Init
@@ -44,6 +46,15 @@ uint8_t nRF24_ReadConfig(void);
 void nRF24_WriteConfig(uint8_t conf);
 uint8_t nRF24_ReadStatus();
 void nRF24_WriteStatus(uint8_t st);
+
+//
+// FIFO Status register
+//
+uint8_t nRF24_IsTxReuse(void);
+uint8_t nRF24_IsTxFull(void);
+uint8_t nRF24_IsTxEmpty(void);
+uint8_t nRF24_IsRxFull(void);
+uint8_t nRF24_IsRxEmpty(void);
 
 //
 // SWITCHING BETWEEN RX AND TX
@@ -96,9 +107,15 @@ void nRF24_FlushRX(void);
 void nRF24_FlushTX(void);
 
 //
-// IRQ HANDLER
+// Interrupt mode
 //
 void nRF24_IRQ_Handler(void);
+
+void nRF24_EventRxCallback(void);
+void nRF24_EventTxCallback(void);
+void nRF24_EventMrCallback(void);
+
+void nRF24_Event(void);
 
 //
 // POLLING METHOD
