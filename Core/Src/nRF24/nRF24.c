@@ -29,9 +29,9 @@ extern volatile uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
 #define NRF24_CE_HIGH		HAL_GPIO_WritePin(NRF24_CE_GPIO_Port, NRF24_CE_Pin, GPIO_PIN_SET)
 #define NRF24_CE_LOW		HAL_GPIO_WritePin(NRF24_CE_GPIO_Port, NRF24_CE_Pin, GPIO_PIN_RESET)
 
-static void nRF24_Delay(uint8_t Time)
+static void nRF24_Delay_ms(uint8_t Time)
 {
-	HAL_Delay(1);
+	HAL_Delay(Time);
 }
 
 static void nRF24_SendSpi(uint8_t *Data, uint8_t Length)
@@ -118,7 +118,7 @@ void nRF24_RX_Mode(void)
 	nRF24_FlushTX();
 
 	NRF24_CE_HIGH;
-	nRF24_Delay(1);
+	nRF24_Delay_ms(1);
 }
 
 void nRF24_TX_Mode(void)
@@ -138,7 +138,7 @@ void nRF24_TX_Mode(void)
 	// Flush TX
 	nRF24_FlushTX();
 
-	nRF24_Delay(1);
+	nRF24_Delay_ms(1);
 }
 
 
@@ -324,7 +324,7 @@ uint8_t nRF24_GetDynamicPayloadSize(void)
     if (result > 32) // Something went wrong :)
     {
         nRF24_FlushRX();
-        HAL_Delay(2);
+        nRF24_Delay_ms(2);
         return 0;
     }
     return result;
@@ -379,11 +379,11 @@ void nRF24_WaitTX()
 {
 	uint8_t status;
 	NRF24_CE_HIGH;
-	nRF24_Delay(1);
+	nRF24_Delay_ms(1);
 	NRF24_CE_LOW;
 	do
 	{
-		nRF24_Delay(1);
+		nRF24_Delay_ms(1);
 		status = nRF24_ReadStatus();
 	}while(!((status & (1<<NRF24_MAX_RT)) || (status & (1<<NRF24_TX_DS))));
 
@@ -461,7 +461,7 @@ void nRF24_Init(SPI_HandleTypeDef *hspi)
 	NRF24_CE_LOW;
 	NRF24_CSN_HIGH;
 
-	nRF24_Delay(5); // Wait for radio power up
+	nRF24_Delay_ms(5); // Wait for radio power up
 
 	nRF24_SetPALevel(NRF24_PA_PWR_0dBM); // Radio power
 	nRF24_SetDataRate(NRF24_RF_DR_250KBPS); // Data Rate
@@ -480,13 +480,13 @@ void nRF24_Init(SPI_HandleTypeDef *hspi)
 	nRF24_AutoACK(0, 1); // Enable auto ACK for pipe 0
 	nRF24_SetAddressWidth(NRF24_ADDR_SIZE); // Set address size
 
-	nRF24_Delay(20);
+	nRF24_Delay_ms(20);
 
 	nRF24_EnableRXDataReadyIRQ(0);
 	nRF24_EnableTXDataSentIRQ(0);
 	nRF24_EnableMaxRetransmitIRQ(0);
 
-	nRF24_Delay(20);
+	nRF24_Delay_ms(20);
 
 	nRF24_ClearInterrupts();
 }
