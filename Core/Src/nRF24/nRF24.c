@@ -450,9 +450,11 @@ void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size)
 #else
 	nRF24_ReadRegisters(NRF24_CMD_R_RX_PAYLOAD, data, NRF24_PAYLOAD_SIZE);
 #endif
+#if (NRF24_INTERRUPT_MODE == 0)
 	nRF24_WriteRegister(NRF24_STATUS, (1<NRF24_RX_DR));
 	if(nRF24_ReadStatus() & (1<<NRF24_TX_DS))
 		nRF24_WriteRegister(NRF24_STATUS, (1<<NRF24_TX_DS));
+#endif
 }
 
 nRF24_TX_Status nRF24_SendPacket(uint8_t* Data, uint8_t Size)
@@ -576,6 +578,7 @@ void nRF24_Init(SPI_HandleTypeDef *hspi)
 	nRF24_EnableCRC(1); // Enable CRC
 	nRF24_SetCRCLength(NRF24_CRC_WIDTH_1B); // CRC Length 1 byte
 	nRF24_SetRetries(0x04, 0x07); // 1000us, 7 times
+
 #if (NRF24_DYNAMIC_PAYLOAD == 1)
 	nRF24_WriteRegister(NRF24_FEATURE, nRF24_ReadRegister(NRF24_FEATURE) | (1<<NRF24_EN_DPL)); // Enable dynamic payload feature
 	nRF24_WriteRegister(NRF24_DYNPD, 0x3F); // Enable dynamic payloads for all pipes
@@ -590,7 +593,7 @@ void nRF24_Init(SPI_HandleTypeDef *hspi)
 
 	nRF24_Delay_ms(1);
 
-	nRF24_EnableRXDataReadyIRQ(0);
+	nRF24_EnableRXDataReadyIRQ(1);
 	nRF24_EnableTXDataSentIRQ(0);
 	nRF24_EnableMaxRetransmitIRQ(0);
 
