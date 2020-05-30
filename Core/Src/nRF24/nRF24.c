@@ -15,7 +15,8 @@ static SPI_HandleTypeDef *hspi_nrf;
 
 static uint8_t addr_p0_backup[NRF24_ADDR_SIZE];
 
-static volatile uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
+static uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
+static volatile uint8_t Nrf24InterruptFlag;
 
 //
 // BASIC READ/WRITE FUNCTIONS
@@ -499,29 +500,39 @@ uint8_t nRF24_RXAvailible(void)
 
 void nRF24_IRQ_Handler(void)
 {
-	uint8_t status = nRF24_ReadStatus();
-	uint8_t ClearIrq = 0;
-	// RX FIFO Interrupt
-	if ((status & (1 << NRF24_RX_DR)))
-	{
-		nrf24_rx_flag = 1;
-		ClearIrq |= (1<<NRF24_RX_DR); // Interrupt flag clear
 
-	}
-	// TX Data Sent interrupt
-	if ((status & (1 << NRF24_TX_DS)))
-	{
-		nrf24_tx_flag = 1;
-		ClearIrq |= (1<<NRF24_TX_DS); // Interrupt flag clear
-	}
-	// Max Retransmits interrupt
-	if ((status & (1 << NRF24_MAX_RT)))
-	{
-		nrf24_mr_flag = 1;
-		ClearIrq |= (1<<NRF24_MAX_RT); // Interrupt flag clear
-	}
+	Nrf24InterruptFlag = 1;
+}
 
-	nRF24_WriteStatus(ClearIrq);
+void nRF24_IRQ_Read(void)
+{
+	if(Nrf24InterruptFlag == 1)
+	{
+		Nrf24InterruptFlag = 0;
+
+		uint8_t status = nRF24_ReadStatus();
+		uint8_t ClearIrq = 0;
+		// RX FIFO Interrupt
+		if ((status & (1 << NRF24_RX_DR)))
+		{
+			nrf24_rx_flag = 1;
+			ClearIrq |= (1<<NRF24_RX_DR); // Interrupt flag clear
+		}
+		// TX Data Sent interrupt
+		if ((status & (1 << NRF24_TX_DS)))
+		{
+			nrf24_tx_flag = 1;
+			ClearIrq |= (1<<NRF24_TX_DS); // Interrupt flag clear
+		}
+		// Max Retransmits interrupt
+		if ((status & (1 << NRF24_MAX_RT)))
+		{
+			nrf24_mr_flag = 1;
+			ClearIrq |= (1<<NRF24_MAX_RT); // Interrupt flag clear
+		}
+
+		nRF24_WriteStatus(ClearIrq);
+	}
 }
 
 //
@@ -545,6 +556,8 @@ __weak void nRF24_EventMrCallback(void)
 
 void nRF24_Event(void)
 {
+	nRF24_IRQ_Read(); // Check if there was any interrupt
+
 	if(nrf24_rx_flag)
 	{
 		nRF24_EventRxCallback();
