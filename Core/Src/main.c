@@ -29,6 +29,7 @@
 #include "stdio.h"
 #include "nRF24/nRF24_Defs.h"
 #include "nRF24/nRF24.h"
+#include "ring_buffer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,7 +39,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MESSAGE_BUFF_LEN 33 // 32 payload + \0
+#define MESSAGE_BUFF_LEN 100 // 32 payload + \0
 
 /* USER CODE END PD */
 
@@ -108,19 +109,28 @@ int main(void)
   nRF24_SetTXAddress("Odb");
   nRF24_TX_Mode();
   uint8_t i;
+  uint32_t PackageTimer = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  for(i=0; i<9; i++)
-	  {
-		  MessageLength = sprintf(Message, "%d", Numbers[i] );
-		  nRF24_SendPacket(Message, MessageLength);
-		  HAL_Delay(1000);
-	  }
+#if (NRF24_USE_INTERRUPT == 1)
+	  nRF24_Event();
+#endif
 
+	  if((HAL_GetTick() - PackageTimer) > 1000)
+	  {
+		  MessageLength = sprintf(Message, "%d\n\r", Numbers[i] );
+//		  MessageLength = sprintf(Message, "abcdefghijklmnopqrstuwxyz1234567890 0987654321zyxwutsrqponmlkjihgfedcba\n\r" );
+		  nRF24_SendData(Message, MessageLength);
+
+		  i += 1;
+		  i %= 9;
+
+		  PackageTimer = HAL_GetTick();
+	  }
 
     /* USER CODE END WHILE */
 
@@ -184,6 +194,15 @@ static void MX_NVIC_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	if(GPIO_Pin == NRF24_IRQ_Pin)
+	{
+#if (NRF24_USE_INTERRUPT == 1)
+		nRF24_IRQ_Handler();
+#endif
+	}
+}
 
 /* USER CODE END 4 */
 

@@ -13,9 +13,18 @@
 //
 //	Configuration
 //
+#define NRF24_USE_INTERRUPT		1
+#if (NRF24_USE_INTERRUPT == 1)
+#define NRF24_USE_RINGBUFFER	1
+#endif
+
 
 #define NRF24_DYNAMIC_PAYLOAD	1
-#define NRF24_INTERRUPT_MODE	1
+
+#if (NRF24_USE_RINGBUFFER == 1)
+#define NRF24_RX_BUFFER_SIZE 32
+#define NRF24_TX_BUFFER_SIZE 32
+#endif
 
 //
 // Enums
@@ -32,11 +41,9 @@ typedef enum
 	NRF24_NO_TRANSMITTED_PACKET,	// 1
 } nRF24_TX_Status;
 
-
 //
 // Init
 //
-
 void nRF24_Init(SPI_HandleTypeDef *hspi);
 
 //
@@ -87,18 +94,19 @@ void nRF24_EnableRXDataReadyIRQ(uint8_t onoff);
 void nRF24_EnableTXDataSentIRQ(uint8_t onoff);
 void nRF24_EnableMaxRetransmitIRQ(uint8_t onoff);
 
+#if (NRF24_USE_INTERRUPT == 1)
 //
-// PUSH/PULL DATA TO PAYLOAD
+//	Main event for whole communication
+//	Put it in main while(1) loop
 //
-void nRF24_WriteTXPayload(uint8_t * data, uint8_t size);
-void nRF24_WaitTX();
-void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size);
+void nRF24_Event(void);
+#endif
 
 //
 // TRANSMITTING DATA
 //
-nRF24_TX_Status nRF24_SendPacket(uint8_t* Data, uint8_t Size);
-nRF24_RX_Status nRF24_ReceivePacket(uint8_t* Data, uint8_t *Size);
+nRF24_TX_Status nRF24_SendData(uint8_t *Data, uint8_t Size);
+nRF24_RX_Status nRF24_ReadData(uint8_t *Data, uint8_t *Size);
 
 //
 // FLUSHING FIFOs
@@ -114,12 +122,5 @@ void nRF24_IRQ_Handler(void);
 void nRF24_EventRxCallback(void);
 void nRF24_EventTxCallback(void);
 void nRF24_EventMrCallback(void);
-
-void nRF24_Event(void);
-
-//
-// POLLING METHOD
-//
-uint8_t nRF24_RXAvailible(void);
 
 #endif /* INC_NRF24_NRF24_H_ */

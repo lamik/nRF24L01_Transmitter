@@ -10,13 +10,27 @@
 
 #include "nRF24/nRF24.h"
 #include "nRF24/nRF24_Defs.h"
+#include "ring_buffer.h"
 
 static SPI_HandleTypeDef *hspi_nrf;
 
 static uint8_t addr_p0_backup[NRF24_ADDR_SIZE];
 
+#if (NRF24_USE_INTERRUPT == 1)
 static uint8_t nrf24_rx_flag, nrf24_tx_flag, nrf24_mr_flag;
-static volatile uint8_t Nrf24InterruptFlag;
+static volatile uint8_t Nrf24InterruptFlag, Nrf24RXReadyDataFlag;
+#endif
+
+#if (NRF24_USE_INTERRUPT == 1)
+#if (NRF24_USE_RINGBUFFER == 1)
+static uint8_t Nrf24TXFreeFlag;
+static RingBuffer *RXBuffer, *TXBuffer;
+#endif
+#if (NRF24_USE_RINGBUFFER == 0)
+static uint8_t RXBuffer[32];
+static uint8_t RXDataCounter;
+#endif
+#endif
 
 //
 // BASIC READ/WRITE FUNCTIONS
@@ -48,7 +62,6 @@ static void nRF24_ReadSpi(uint8_t *Data, uint8_t Length)
 //
 // END OF BASIC READ/WRITE FUNCTIONS
 //
-
 static uint8_t nRF24_ReadRegister(uint8_t reg)
 {
 	uint8_t result;
@@ -141,8 +154,6 @@ void nRF24_TX_Mode(void)
 
 	nRF24_Delay_ms(1);
 }
-
-
 
 uint8_t nRF24_ReadConfig(void)
 {
@@ -359,7 +370,6 @@ void nRF24_SetTXAddress(uint8_t* address)
 
 	nRF24_WriteRegisters(NRF24_RX_ADDR_P0, address_rev, NRF24_ADDR_SIZE); // Pipe 0 must be same for auto ACk
 	nRF24_WriteRegisters(NRF24_TX_ADDR, address_rev, NRF24_ADDR_SIZE);
-
 }
 
 void nRF24_ClearInterrupts(void)
@@ -440,7 +450,6 @@ void nRF24_WaitTX()
 		nRF24_Delay_ms(1);
 		status = nRF24_ReadStatus();
 	}while(!((status & (1<<NRF24_MAX_RT)) || (status & (1<<NRF24_TX_DS))));
-
 }
 
 void nRF24_ReadRXPaylaod(uint8_t *data, uint8_t *size)
@@ -464,43 +473,186 @@ nRF24_TX_Status nRF24_SendPacket(uint8_t* Data, uint8_t Size)
 		return NRF24_NO_TRANSMITTED_PACKET;
 
 	nRF24_WriteTXPayload(Data, Size);
+#if (NRF24_USE_RINGBUFFER == 0)
 	nRF24_WaitTX();
+#endif
 
 	return NRF24_TRANSMITTED_PACKET;
 }
 
-nRF24_RX_Status nRF24_ReceivePacket(uint8_t* Data, uint8_t *Size)
+#if (NRF24_USE_RINGBUFFER == 1)
+uint8_t nRF24_IsSomtehingToRead(void)
 {
-#if (NRF24_INTERRUPT_MODE == 0)
-	if(nRF24_RXAvailible())
-	{
-#endif
-		nRF24_ReadRXPaylaod(Data, Size);
-#if (NRF24_INTERRUPT_MODE == 0)
-		return NRF24_RECEIVED_PACKET;
-	}
-	return NRF24_NO_RECEIVED_PACKET;
-#endif
+	return RB_ElementsAvailable(RXBuffer)?1:0;
 }
 
-uint8_t nRF24_RXAvailible(void)
+uint8_t nRF24_IsSomtehingToSend(void)
 {
+	return RB_ElementsAvailable(TXBuffer)?1:0;
+}
+#endif
+
+uint8_t nRF24_RXAvailable(void)
+{
+#if (NRF24_USE_INTERRUPT == 0)
 	uint8_t status = nRF24_ReadStatus();
 
 	// RX FIFO Interrupt
 	if ((status & (1 << 6)))
 	{
-		nrf24_rx_flag = 1;
 		status |= (1<<6); // Interrupt flag clear
 		nRF24_WriteStatus(status);
 		return 1;
 	}
 	return 0;
+#endif
+#if (NRF24_USE_INTERRUPT == 1) && (NRF24_USE_RINGBUFFER == 0)
+	if(RXDataCounter > 0)
+	{
+		return 1;
+	}
+	return 0;
+#endif
+#if (NRF24_USE_RINGBUFFER == 1)
+	return nRF24_IsSomtehingToRead();
+#endif
 }
 
+nRF24_RX_Status nRF24_ReceivePacket(uint8_t* Data, uint8_t *Size)
+{
+#if (NRF24_USE_INTERRUPT == 0)
+	if(nRF24_RXAvailable())
+	{
+#endif
+		nRF24_ReadRXPaylaod(Data, Size);
+		return NRF24_RECEIVED_PACKET;
+#if (NRF24_USE_INTERRUPT == 0)
+	}
+	return NRF24_NO_RECEIVED_PACKET;
+#endif
+
+}
+
+nRF24_TX_Status nRF24_SendData(uint8_t* Data, uint8_t Size)
+{
+#if (NRF24_USE_RINGBUFFER != 1) // (NRF24_USE_INTERRUPT any)
+	return nRF24_SendPacket(Data, Size);
+#endif
+#if (NRF24_USE_RINGBUFFER == 1)
+	uint8_t i = 0;
+
+	while(Size > 0)
+	{
+		if(RB_OK == RB_WriteToBuffer(TXBuffer, Data[i++]))
+		{
+			Size--;
+		}
+		else
+		{
+			return NRF24_NO_TRANSMITTED_PACKET;
+		}
+	}
+	return NRF24_TRANSMITTED_PACKET;
+#endif
+}
+#if (NRF24_USE_RINGBUFFER == 1)
+void nRF24_CheckTXAndSend(void)
+{
+	uint8_t i, DataCounter;
+	uint8_t TXPacket[32];
+
+	if(nRF24_IsSomtehingToSend() && Nrf24TXFreeFlag)
+	{
+		nRF24_TX_Mode();
+
+		Nrf24TXFreeFlag = 0;
+		DataCounter = RB_ElementsAvailable(TXBuffer);
+		if(DataCounter > 32)
+		{
+			DataCounter = 32; // Max Payload
+		}
+
+		for(i = 0; i < DataCounter; i++)
+		{
+			RB_ReadFromBuffer(TXBuffer, &TXPacket[i]);
+		}
+
+		nRF24_SendPacket(TXPacket, DataCounter);
+		NRF24_CE_HIGH;
+		nRF24_Delay_ms(1);
+		NRF24_CE_LOW;
+	}
+}
+#endif
+#if (NRF24_USE_INTERRUPT == 1)
+void nRF24_ReceiveData(void)
+{
+#if (NRF24_USE_RINGBUFFER == 1)
+	uint8_t i, DataCounter;
+	uint8_t RXPacket[32];
+	do
+	{
+		nRF24_ReceivePacket(RXPacket, &DataCounter);
+
+		for(i = 0; i < DataCounter; i++)
+		{
+			RB_WriteToBuffer(RXBuffer, RXPacket[i]);
+		}
+
+	}while(!nRF24_IsRxEmpty());
+#endif
+#if (NRF24_USE_RINGBUFFER == 0)
+	nRF24_ReceivePacket(RXBuffer, &RXDataCounter);
+#endif
+}
+#endif
+
+nRF24_RX_Status nRF24_ReadData(uint8_t *Data, uint8_t *Size)
+{
+#if (NRF24_USE_INTERRUPT == 0)
+	if(NRF24_RECEIVED_PACKET == nRF24_ReceivePacket(Data, Size))
+	{
+		return NRF24_RECEIVED_PACKET;
+	}
+	*Size = 0;
+	return NRF24_NO_RECEIVED_PACKET;
+#endif
+#if (NRF24_USE_INTERRUPT == 1)
+	uint8_t i = 0;
+	*Size = 0;
+
+	  if(nRF24_RXAvailable())
+	  {
+#if (NRF24_USE_RINGBUFFER == 1)
+		while(RB_OK == RB_ReadFromBuffer(RXBuffer, &Data[i]))
+		{
+			i++;
+		}
+		*Size = i;
+#endif
+#if (NRF24_USE_RINGBUFFER == 0)
+		for(i = 0; i < RXDataCounter; i++)
+		{
+			Data[i] = RXBuffer[i];
+		}
+#endif
+	  }
+#if (NRF24_USE_RINGBUFFER == 0)
+	*Size = RXDataCounter;
+	RXDataCounter = 0;
+#endif
+	if(*Size == 0)
+	{
+		return NRF24_NO_RECEIVED_PACKET;
+	}
+
+	return NRF24_RECEIVED_PACKET;
+#endif
+}
+
+#if (NRF24_USE_INTERRUPT == 1)
 void nRF24_IRQ_Handler(void)
 {
-
 	Nrf24InterruptFlag = 1;
 }
 
@@ -536,7 +688,7 @@ void nRF24_IRQ_Read(void)
 }
 
 //
-// nRF24 Event for Interrupt mode
+// Additional callbacks for Interrupt mode
 //
 
 __weak void nRF24_EventRxCallback(void)
@@ -558,14 +710,24 @@ void nRF24_Event(void)
 {
 	nRF24_IRQ_Read(); // Check if there was any interrupt
 
+#if (NRF24_USE_RINGBUFFER == 1)
+	nRF24_CheckTXAndSend();
+#endif
+
 	if(nrf24_rx_flag)
 	{
+#if (NRF24_USE_INTERRUPT == 1)
+		nRF24_ReceiveData();
+#endif
 		nRF24_EventRxCallback();
 		nrf24_rx_flag = 0;
 	}
 
 	if(nrf24_tx_flag)
 	{
+#if (NRF24_USE_RINGBUFFER == 1)
+		Nrf24TXFreeFlag = 1;
+#endif
 		nRF24_EventTxCallback();
 		nrf24_tx_flag = 0;
 	}
@@ -576,6 +738,7 @@ void nRF24_Event(void)
 		nrf24_mr_flag = 0;
 	}
 }
+#endif
 
 void nRF24_Init(SPI_HandleTypeDef *hspi)
 {
@@ -606,11 +769,23 @@ void nRF24_Init(SPI_HandleTypeDef *hspi)
 
 	nRF24_Delay_ms(1);
 
+#if (NRF24_USE_INTERRUPT == 1)
 	nRF24_EnableRXDataReadyIRQ(1);
+#endif
+#if (NRF24_USE_INTERRUPT == 0)
+	nRF24_EnableRXDataReadyIRQ(0);
+#endif
 	nRF24_EnableTXDataSentIRQ(0);
 	nRF24_EnableMaxRetransmitIRQ(0);
 
 	nRF24_Delay_ms(1);
 
 	nRF24_ClearInterrupts();
+#if (NRF24_USE_RINGBUFFER == 1)
+	nRF24_EnableRXDataReadyIRQ(1);
+	nRF24_EnableTXDataSentIRQ(1);
+	Nrf24TXFreeFlag = 1;
+	RB_CreateBuffer(&TXBuffer, NRF24_TX_BUFFER_SIZE);
+	RB_CreateBuffer(&RXBuffer, NRF24_RX_BUFFER_SIZE);
+#endif
 }
